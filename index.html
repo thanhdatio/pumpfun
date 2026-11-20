@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pump.fun & Solana Token Scanner (Local Offline-First)</title>
+    <style>
+        :root {
+            --bg-dark: #0d1117;
+            --bg-card: #161b22;
+            --border: #30363d;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #2ea043;
+            --danger: #f85149;
+            --warning: #d29922;
+            --info: #58a6ff;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); padding: 20px; line-height: 1.5; }
+        .container { max-width: 1300px; margin: 0 auto; }
+        
+        /* Header */
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px; flex-wrap: wrap; gap: 15px; }
+        h1 { font-size: 1.4rem; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .badge-local { background: rgba(46, 160, 67, 0.2); color: #3fb950; border: 1px solid #2ea043; font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; }
+        
+        /* Control Panel */
+        .controls { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; background: var(--bg-card); padding: 15px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 20px; }
+        input, select, button { padding: 10px 14px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-dark); color: #fff; font-size: 0.9rem; }
+        input:focus { outline: none; border-color: var(--info); }
+        button { background: var(--accent); border: none; font-weight: 600; cursor: pointer; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        button.btn-secondary { background: #21262d; border: 1px solid var(--border); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Filters */
+        .filters { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; font-size: 0.85rem; }
+        .filter-item { display: flex; align-items: center; gap: 6px; background: var(--bg-card); padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); }
+        .filter-item input[type="number"] { width: 80px; padding: 4px 8px; }
+
+        /* Grid Cards */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(390px, 1fr)); gap: 16px; }
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; transition: transform 0.15s; }
+        .card:hover { border-color: var(--info); }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .token-info { display: flex; gap: 10px; align-items: center; }
+        .token-img { width: 42px; height: 42px; border-radius: 50%; background: #21262d; object-fit: cover; }
+        .token-name { font-weight: bold; font-size: 1.05rem; color: #fff; }
+        .token-symbol { color: var(--text-muted); font-size: 0.85rem; }
+        
+        /* Score Circle */
+        .score-box { text-align: center; padding: 6px 12px; border-radius: 8px; font-weight: bold; min-width: 75px; }
+        .score-high { background: rgba(46, 160, 67, 0.2); color: #3fb950; border: 1px solid #2ea043; }
+        .score-med { background: rgba(210, 153, 34, 0.2); color: #e3b341; border: 1px solid #d29922; }
+        .score-low { background: rgba(248, 81, 73, 0.2); color: #ff7b72; border: 1px solid #f85149; }
+
+        /* Metrics */
+        .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--bg-dark); padding: 10px; border-radius: 6px; font-size: 0.82rem; }
+        .metric-label { color: var(--text-muted); display: block; font-size: 0.72rem; }
+        .metric-val { font-weight: 600; color: #fff; }
+
+        /* Checklist */
+        .checklist { list-style: none; font-size: 0.83rem; display: flex; flex-direction: column; gap: 5px; }
+        .checklist li { display: flex; justify-content: space-between; border-bottom: 1px dashed #21262d; padding-bottom: 4px; }
+        .status-ok { color: #3fb950; }
+        .status-warn { color: #e3b341; }
+        .status-bad { color: #ff7b72; }
+
+        /* Footer Links */
+        .card-actions { display: flex; gap: 8px; margin-top: auto; pt: 8px; }
+        .card-actions a, .card-actions button { flex: 1; text-align: center; text-decoration: none; font-size: 0.8rem; padding: 7px; border-radius: 5px; background: #21262d; color: var(--text-main); border: 1px solid var(--border); }
+        .card-actions a:hover { background: #30363d; color: #fff; }
+
+        .status-bar { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px; display: flex; justify-content: space-between; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>🛡️ Pump.fun & Solana Token Scanner <span class="badge-local">100% Local Client-Side</span></h1>
+            <p style="font-size: 0.82rem; color: var(--text-muted); margin-top: 4px;">Phân tích trực tiếp qua DexScreener & RugCheck API — Không qua máy chủ trung gian, không yêu cầu kết nối ví.</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button id="btnScanLatest" onclick="scanLatestPumpTokens()">🔄 Quét Token Mới Nhất</button>
+            <button id="btnAutoRefresh" class="btn-secondary" onclick="toggleAutoRefresh()">⏱️ Tự động quét: TẮT</button>
+        </div>
+    </header>
+
+    <!-- Phân tích thủ công 1 Contract Address -->
+    <div class="controls">
+        <input type="text" id="caInput" placeholder="Dán địa chỉ Contract (CA) kết thúc bằng ...pump hoặc bất kỳ token Solana nào để chấm điểm sâu...">
+        <button onclick="analyzeSingleCA()">🔍 Phân Tích CA Này</button>
+        <button class="btn-secondary" onclick="clearResults()">🗑️ Xóa Danh Sách</button>
+    </div>
+
+    <!-- Bộ lọc điều kiện -->
+    <div class="filters">
+        <div class="filter-item">
+            <label>Điểm tối thiểu:</label>
+            <input type="number" id="minScore" value="50" min="0" max="100" onchange="renderCards()">
+        </div>
+        <div class="filter-item">
+            <label>Thanh khoản tối thiểu ($):</label>
+            <input type="number" id="minLiq" value="3000" step="1000" onchange="renderCards()">
+        </div>
+        <div class="filter-item">
+            <input type="checkbox" id="onlyPump" checked onchange="renderCards()">
+            <label for="onlyPump">Chỉ lọc token từ Pump.fun (đuôi "pump")</label>
+        </div>
+        <div class="filter-item">
+            <input type="checkbox" id="requireSocials" onchange="renderCards()">
+            <label for="requireSocials">Bắt buộc có X (Twitter) / Web</label>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <span id="statusText">Sẵn sàng. Nhấn "Quét Token Mới Nhất" hoặc dán Contract Address để bắt đầu.</span>
+        <span id="counterText">Hiển thị: 0 token</span>
+    </div>
+
+    <div class="grid" id="resultsGrid"></div>
+</div>
+
+<script>
+    let analyzedTokens = new Map(); // Lưu trữ kết quả theo CA
+    let autoRefreshInterval = null;
+
+    // 1. Quét danh sách token mới cập nhật trên DexScreener (lọc hệ Solana / Pump.fun)
+    async function scanLatestPumpTokens() {
+        const btn = document.getElementById('btnScanLatest');
+        btn.disabled = true;
+        setStatus('⏳ Đang lấy dữ liệu token mới từ DexScreener...');
+
+        try {
+            // Lấy danh sách token profiles mới nhất
+            const res = await fetch('https://api.dexscreener.com/token-profiles/latest/v1');
+            const profiles = await res.json();
+
+            // Lọc mạng Solana
+            let solTokens = profiles.filter(p => p.chainId === 'solana');
+            
+            // Nếu bật chế độ ưu tiên đuôi pump
+            const onlyPump = document.getElementById('onlyPump').checked;
+            if (onlyPump) {
+                const pumpOnly = solTokens.filter(p => p.tokenAddress.toLowerCase().endsWith('pump'));
+                if (pumpOnly.length > 0) solTokens = pumpOnly;
+            }
+
+            // Lấy tối đa 15 token mới nhất mỗi lượt để tránh bị Rate Limit từ API miễn phí
+            const batch = solTokens.slice(0, 15);
+            setStatus(`⏳ Đang phân tích chuyên sâu ${batch.length} token mới nhất...`);
+
+            for (const item of batch) {
+                if (!analyzedTokens.has(item.tokenAddress)) {
+                    await evaluateToken(item.tokenAddress, item);
+                    // Nghỉ nhẹ 250ms giữa các request để đảm bảo không bị chặn IP
+                    await new Promise(r => setTimeout(r, 250));
+                }
+            }
+
+            setStatus(`✅ Hoàn tất cập nhật lúc ${new Date().toLocaleTimeString()}`);
+        } catch (err) {
+            console.error(err);
+            setStatus('❌ Lỗi kết nối API: ' + err.message);
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // 2. Phân tích 1 CA cụ thể do người dùng nhập
+    async function analyzeSingleCA() {
+        const ca = document.getElementById('caInput').value.trim();
+        if (!ca) return alert('Vui lòng nhập Contract Address (CA)!');
+        
+        setStatus(`⏳ Đang kiểm tra sâu contract: ${ca}...`);
+        await evaluateToken(ca, null, true);
+        setStatus(`✅ Đã phân tích xong ${ca}`);
+    }
+
+    // 3. Hàm lõi: Kết hợp dữ liệu DexScreener + RugCheck và Chấm điểm
+    async function evaluateToken(ca, profileHint = null, forceUpdate = false) {
+        if (analyzedTokens.has(ca) && !forceUpdate) return;
+
+        try {
+            // Gọi song song DexScreener Pair Data và RugCheck Summary
+            const [dexRes, rugRes] = await Promise.allSettled([
+                fetch(`https://api.dexscreener.com/latest/dex/tokens/${ca}`).then(r => r.json()),
+                fetch(`https://api.rugcheck.xyz/v1/tokens/${ca}/report/summary`).then(r => r.json())
+            ]);
+
+            const dexData = dexRes.status === 'fulfilled' ? dexRes.value : null;
+            const rugData = rugRes.status === 'fulfilled' ? rugRes.value : null;
+
+            if (!dexData || !dexData.pairs || dexData.pairs.length === 0) {
+                // Token quá mới chưa có cặp giao dịch trên DexScreener
+                return;
+            }
+
+            // Lấy cặp giao dịch có thanh khoản lớn nhất (thường là PumpSwap hoặc Raydium)
+            const pair = dexData.pairs.sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0))[0];
+            
+            const evaluation = calculateScore(pair, rugData, profileHint);
+            analyzedTokens.set(ca, evaluation);
+            renderCards();
+
+        } catch (e) {
+            console.warn(`Bỏ qua ${ca}:`, e);
+        }
+    }
+
+    // 4. Thuật toán chấm điểm tiềm năng & rủi ro (Thang 100)
+    function calculateScore(pair, rugData, profileHint) {
+        let score = 0;
+        let reasons = [];
+
+        const liq = pair.liquidity?.usd || 0;
+        const fdv = pair.fdv || 0;
+        const vol1h = pair.volume?.h1 || 0;
+        const vol5m = pair.volume?.m5 || 0;
+        const buys5m = pair.txns?.m5?.buys || 0;
+        const sells5m = pair.txns?.m5?.sells || 0;
+        const buys1h = pair.txns?.h1?.buys || 0;
+        const sells1h = pair.txns?.h1?.sells || 0;
+
+        // A. Đánh giá an toàn Contract qua RugCheck (Tối đa 35đ)
+        let rugStatus = 'Không có dữ liệu';
+        let rugScoreVal = rugData?.score || null;
+        let risks = rugData?.risks || [];
+
+        if (rugData && !rugData.error) {
+            const hasDanger = risks.some(r => r.level === 'danger');
+            const warnCount = risks.filter(r => r.level === 'warn').length;
+
+            if (!hasDanger && warnCount === 0) {
+                score += 35;
+                rugStatus = 'An toàn cao (Clean)';
+            } else if (!hasDanger && warnCount <= 2) {
+                score += 22;
+                rugStatus = `Cảnh báo nhẹ (${warnCount} warns)`;
+            } else {
+                score += 5;
+                rugStatus = `Rủi ro cao (${risks.length} cảnh báo)`;
+            }
+        } else {
+            // Mặc định token chuẩn Pump.fun đã khóa Mint/Freeze
+            score += 20;
+            rugStatus = 'Chuẩn Pump.fun (Chưa index RugCheck)';
+        }
+
+        // B. Đánh giá Thanh khoản & Tỷ lệ Liq/FDV (Tối đa 25đ)
+        const liqRatio = fdv > 0 ? (liq / fdv) * 100 : 0;
+        if (liq >= 10000 && liqRatio >= 12) {
+            score += 25;
+        } else if (liq >= 4000 && liqRatio >= 8) {
+            score += 18;
+        } else if (liq >= 1500) {
+            score += 10;
+        }
+
+        // C. Đánh giá Sức mua & Dòng tiền (Tối đa 25đ)
+        const buyPressure5m = (buys5m + sells5m) > 0 ? buys5m / (buys5m + sells5m) : 0;
+        if (buyPressure5m >= 0.58 && buys5m >= 10) {
+            score += 15; // Áp lực mua áp đảo
+        } else if (buyPressure5m >= 0.5) {
+            score += 8;
+        }
+
+        if (vol1h > fdv * 0.5 && vol1h > 5000) {
+            score += 10; // Dòng tiền luân chuyển mạnh
+        } else if (vol1h > 1000) {
+            score += 5;
+        }
+
+        // D. Mạng xã hội & Độ chỉn chu (Tối đa 15đ)
+        const socials = pair.info?.socials || profileHint?.links || [];
+        const websites = pair.info?.websites || [];
+        const hasTwitter = socials.some(s => s.type === 'twitter' || (s.url && s.url.includes('x.com')) || (s.url && s.url.includes('twitter.com')));
+        const hasTg = socials.some(s => s.type === 'telegram' || (s.url && s.url.includes('t.me')));
+        const hasWeb = websites.length > 0;
+
+        if (hasTwitter) score += 6;
+        if (hasTg) score += 5;
+        if (hasWeb) score += 4;
+
+        // Xác định tuổi token
+        const createdAt = pair.pairCreatedAt ? new Date(pair.pairCreatedAt) : null;
+        const ageMinutes = createdAt ? Math.floor((Date.now() - createdAt.getTime()) / 60000) : null;
+
+        return {
+            ca: pair.baseToken.address,
+            name: pair.baseToken.name,
+            symbol: pair.baseToken.symbol,
+            image: pair.info?.imageUrl || profileHint?.icon || '',
+            dexId: pair.dexId,
+            priceUsd: pair.priceUsd,
+            liq,
+            fdv,
+            vol5m,
+            vol1h,
+            buys5m,
+            sells5m,
+            buys1h,
+            sells1h,
+            score: Math.min(100, score),
+            rugStatus,
+            risks,
+            hasTwitter,
+            hasTg,
+            hasWeb,
+            ageMinutes,
+            url: pair.url
+        };
+    }
+
+    // 5. Hiển thị giao diện
+    function renderCards() {
+        const grid = document.getElementById('resultsGrid');
+        const minScore = Number(document.getElementById('minScore').value) || 0;
+        const minLiq = Number(document.getElementById('minLiq').value) || 0;
+        const onlyPump = document.getElementById('onlyPump').checked;
+        const requireSocials = document.getElementById('requireSocials').checked;
+
+        let list = Array.from(analyzedTokens.values()).filter(t => {
+            if (t.score < minScore) return false;
+            if (t.liq < minLiq) return false;
+            if (onlyPump && !t.ca.toLowerCase().endsWith('pump')) return false;
+            if (requireSocials && !t.hasTwitter && !t.hasWeb) return false;
+            return true;
+        });
+
+        // Sắp xếp điểm cao nhất lên đầu
+        list.sort((a, b) => b.score - a.score);
+
+        document.getElementById('counterText').innerText = `Hiển thị: ${list.length} / ${analyzedTokens.size} token đã quét`;
+        grid.innerHTML = '';
+
+        list.forEach(t => {
+            const scoreClass = t.score >= 75 ? 'score-high' : (t.score >= 50 ? 'score-med' : 'score-low');
+            const ageText = t.ageMinutes !== null ? (t.ageMinutes < 60 ? `${t.ageMinutes} phút trước` : `${Math.floor(t.ageMinutes/60)} giờ trước`) : 'Mới';
+            const buyRatio = (t.buys5m + t.sells5m) > 0 ? Math.round((t.buys5m / (t.buys5m + t.sells5m)) * 100) : 50;
+
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <div class="card-header">
+                    <div class="token-info">
+                        <img class="token-img" src="${t.image || 'https://placehold.co/42x42/21262d/8b949e?text=SOL'}" onerror="this.src='https://placehold.co/42x42/21262d/8b949e?text=SOL'">
+                        <div>
+                            <div class="token-name">${escapeHtml(t.name)} <span class="token-symbol">($${escapeHtml(t.symbol)})</span></div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">
+                                Sàn: <b>${t.dexId.toUpperCase()}</b> • Tạo: ${ageText}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="score-box ${scoreClass}">
+                        <div style="font-size: 1.2rem;">${t.score}</div>
+                        <div style="font-size: 0.65rem; text-transform: uppercase;">Điểm</div>
+                    </div>
+                </div>
+
+                <div class="metrics">
+                    <div>
+                        <span class="metric-label">Vốn hóa (FDV)</span>
+                        <span class="metric-val">$${formatNumber(t.fdv)}</span>
+                    </div>
+                    <div>
+                        <span class="metric-label">Thanh khoản</span>
+                        <span class="metric-val">$${formatNumber(t.liq)}</span>
+                    </div>
+                    <div>
+                        <span class="metric-label">Vol 1 Giờ</span>
+                        <span class="metric-val">$${formatNumber(t.vol1h)}</span>
+                    </div>
+                </div>
+
+                <ul class="checklist">
+                    <li>
+                        <span>Kiểm tra Contract (RugCheck):</span>
+                        <span class="${t.rugStatus.includes('An toàn') ? 'status-ok' : (t.rugStatus.includes('Rủi ro') ? 'status-bad' : 'status-warn')}">${t.rugStatus}</span>
+                    </li>
+                    <li>
+                        <span>Lệnh Mua/Bán (5 phút):</span>
+                        <span><b class="status-ok">${t.buys5m} Mua</b> / <b class="status-bad">${t.sells5m} Bán</b> (${buyRatio}% Mua)</span>
+                    </li>
+                    <li>
+                        <span>Kênh truyền thông:</span>
+                        <span>
+                            ${t.hasTwitter ? '✅ X' : '❌ X'} | 
+                            ${t.hasTg ? '✅ TG' : '❌ TG'} | 
+                            ${t.hasWeb ? '✅ Web' : '❌ Web'}
+                        </span>
+                    </li>
+                    <li>
+                        <span>Contract (CA):</span>
+                        <span style="font-family: monospace; cursor: pointer; color: var(--info);" onclick="copyCA('${t.ca}')" title="Click để copy">
+                            ${t.ca.slice(0, 6)}...${t.ca.slice(-6)} 📋
+                        </span>
+                    </li>
+                </ul>
+
+                <div class="card-actions">
+                    <a href="https://pump.fun/coin/${t.ca}" target="_blank">💊 Pump.fun</a>
+                    <a href="${t.url}" target="_blank">📈 DexScreener</a>
+                    <a href="https://rugcheck.xyz/tokens/${t.ca}" target="_blank">🛡️ RugCheck</a>
+                    <a href="https://gmgn.ai/sol/token/${t.ca}" target="_blank">🐸 GMGN</a>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
+
+    function toggleAutoRefresh() {
+        const btn = document.getElementById('btnAutoRefresh');
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+            btn.innerText = '⏱️ Tự động quét: TẮT';
+            btn.style.borderColor = 'var(--border)';
+        } else {
+            scanLatestPumpTokens();
+            autoRefreshInterval = setInterval(scanLatestPumpTokens, 30000); // 30 giây quét 1 lần
+            btn.innerText = '⏱️ Tự động quét: BẬT (30s)';
+            btn.style.borderColor = 'var(--accent)';
+        }
+    }
+
+    function clearResults() {
+        analyzedTokens.clear();
+        renderCards();
+        setStatus('Đã xóa dữ liệu tạm.');
+    }
+
+    function copyCA(ca) {
+        navigator.clipboard.writeText(ca);
+        setStatus(`📋 Đã copy CA: ${ca}`);
+    }
+
+    function setStatus(msg) {
+        document.getElementById('statusText').innerText = msg;
+    }
+
+    function formatNumber(num) {
+        if (!num) return '0';
+        if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+        if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+        return num.toFixed(0);
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>"']/g, m => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[m]));
+    }
+</script>
+</body>
+</html>
